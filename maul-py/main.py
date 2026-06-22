@@ -9,7 +9,7 @@ import logging
 import redis
 import openai
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -37,6 +37,19 @@ from vulnerabilities.agent_protocols import router as a2a_router
 from vulnerabilities.agent_ecosystem import router as ecosystem_router
 from vulnerabilities.agent_marketplace import router as marketplace_router
 from vulnerabilities.agent_governance import router as governance_router
+
+# Agent Trust Protocols (draft-miller-ztnp / draft-miller-ztip)
+# Each protocol has paired BROKEN and SOLUTION tracks plus end-to-end SCENARIOS
+# under /api/examples/<proto>/{broken,solution,scenarios}/...
+from examples.ztnp.broken import router as ztnp_broken_router
+from examples.ztnp.solution import router as ztnp_solution_router
+from examples.ztnp.scenarios import router as ztnp_scenarios_router
+from examples.ztip.broken import router as ztip_broken_router
+from examples.ztip.solution import router as ztip_solution_router
+from examples.ztip.scenarios import router as ztip_scenarios_router
+
+# OWASP Agentic AI Threats and Mitigations v1.0 (Feb 2025) - T1-T15
+from vulnerabilities.owasp_agentic import router as owasp_agentic_router
 
 # ---------- Config & clients ----------
 
@@ -124,6 +137,17 @@ app.include_router(ecosystem_router)
 app.include_router(marketplace_router)
 app.include_router(governance_router)
 
+# Agent Trust Protocols - BROKEN + SOLUTION + SCENARIOS tracks
+app.include_router(ztnp_broken_router)
+app.include_router(ztnp_solution_router)
+app.include_router(ztnp_scenarios_router)
+app.include_router(ztip_broken_router)
+app.include_router(ztip_solution_router)
+app.include_router(ztip_scenarios_router)
+
+# OWASP Agentic AI Threats router (T1-T15)
+app.include_router(owasp_agentic_router)
+
 
 # ---------- Request schema ----------
 
@@ -147,6 +171,37 @@ async def health():
         "status": "healthy",
         "vulnerabilities_loaded": True,
         "warning": "This application is intentionally vulnerable"
+    }
+
+
+# ---------- Source-map exposure lab ----------
+# The front-end bundle (static/js/app.min.js) is minified, but its source map
+# (static/js/app.min.js.map) is shipped alongside it. The map's sourcesContent
+# leaks the original app.src.js, which hardcodes the bypass token and the path
+# below. Recovering them from the map unlocks this endpoint with no auth.
+# See static/js/README.md.
+
+DEBUG_BYPASS_TOKEN = "maul-dev-bypass-7c4e1f90"
+
+
+@app.get("/api/internal/debug-config")
+async def internal_debug_config(x_debug_token: str | None = Header(default=None)):
+    """
+    Hidden "QA back door" gated only by a hardcoded token.
+
+    VULNERABILITY: The token lives in the front-end source and is recoverable
+    from the published source map, so this "internal" endpoint is effectively
+    public. Returns sensitive configuration.
+    """
+    if x_debug_token != DEBUG_BYPASS_TOKEN:
+        raise HTTPException(status_code=403, detail="invalid or missing X-Debug-Token")
+    return {
+        "database_url": "postgresql://maul:maul_pw@db:5432/maul",
+        "openai_api_key": "sk-PROJ-FAKE-do-not-use-1a2b3c4d5e6f7g8h",
+        "redis_url": "redis://redis:6379/0",
+        "internal_hosts": ["maul-internal.lan", "ci-runner.maul-internal.lan"],
+        "sim_password": SIM_PASSWORD,
+        "note": "If you reached this without logging in, a source map leaked the token.",
     }
 
 
@@ -178,7 +233,14 @@ async def info():
             "a2a": "/api/a2a/*",
             "ecosystem": "/api/ecosystem/*",
             "marketplace": "/api/marketplace/*",
-            "governance": "/api/governance/*"
+            "governance": "/api/governance/*",
+            "ztnp_broken":    "/api/examples/ztnp/broken/*",
+            "ztnp_solution":  "/api/examples/ztnp/solution/*",
+            "ztnp_scenarios": "/api/examples/ztnp/scenarios/*",
+            "ztip_broken":    "/api/examples/ztip/broken/*",
+            "ztip_solution":  "/api/examples/ztip/solution/*",
+            "ztip_scenarios": "/api/examples/ztip/scenarios/*",
+            "owasp_agentic": "/api/owasp-agentic/*"
         },
         # VULNERABILITY: Reveals secrets
         "debug_keys": {
