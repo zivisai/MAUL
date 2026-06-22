@@ -16,3 +16,4 @@ asyncpg>=0.27.0
 httpx
 python-multipart
 aiofiles
+cryptography>=41.0.0

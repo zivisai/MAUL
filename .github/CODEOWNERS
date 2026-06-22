@@ -2,7 +2,6 @@
 # These users will be automatically requested for review on PRs
 
 # Default owners for everything in the repo
-# TODO: Replace with your GitHub username or team
 @JacobRMiller
 
 # Python application code

@@ -2,6 +2,8 @@
 
 > **A deliberately vulnerable AI application for penetration testing training and security research.**
 
+*Built and maintained by [ZIVIS](https://zivis.ai) as a public, open-source training range for AI and agentic security. MAUL is a target you stand up in isolation to learn on — not a tool for attacking real systems.*
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![OWASP](https://img.shields.io/badge/OWASP-LLM_Top_10-orange.svg)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
@@ -17,8 +19,11 @@
 - Developers understanding AI security pitfalls
 - Educators demonstrating LLM vulnerabilities
 - CTF competitions and security workshops
+- Anyone wanting to better understand AI security
 
 **Do NOT deploy in production environments or expose to the public internet without proper access controls.**
+
+> New here, or wondering whether a public repo full of vulnerabilities is safe and responsible? See **[THREAT-MODEL.md](THREAT-MODEL.md)** — why this exists, what it is *not*, and the safeguards built in.
 
 ---
 
@@ -52,7 +57,7 @@ MAUL is an open-source, purpose-built vulnerable AI application that simulates r
 ### 1. Clone & Configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/maul.git
+git clone https://github.com/zivisai/MAUL.git
 cd maul
 cp .env.example .env
 # Edit .env and add your OpenAI API key
@@ -93,6 +98,28 @@ docker-compose up
 | LLM09 | Misinformation | ✅ | `/api/documents/*` |
 | LLM10 | Excessive Agency | ✅ | `/api/agent/*` |
 
+### OWASP Agentic AI Threats and Mitigations v1.0 (Feb 2025)
+
+The OWASP GenAI Security Project's [Agentic AI – Threats and Mitigations](https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/) defines 15 threats (T1–T15) specific to autonomous, tool-using, multi-agent systems. MAUL exposes a focused, exploitable endpoint for each, all under `/api/owasp-agentic/*`. Use `GET /api/owasp-agentic/catalog` for the live index.
+
+| # | Threat | Status | Endpoints |
+|---|--------|--------|-----------|
+| T1 | Memory Poisoning | ✅ | `/api/owasp-agentic/t1/memory/*`, `/t1/agent/act` |
+| T2 | Tool Misuse | ✅ | `/api/owasp-agentic/t2/tool/dispatch` |
+| T3 | Privilege Compromise | ✅ | `/api/owasp-agentic/t3/delegate`, `/t3/escalate` |
+| T4 | Resource Overload | ✅ | `/api/owasp-agentic/t4/fanout`, `/t4/loop` |
+| T5 | Cascading Hallucination Attacks | ✅ | `/api/owasp-agentic/t5/cascade` |
+| T6 | Intent Breaking & Goal Manipulation | ✅ | `/api/owasp-agentic/t6/plan` |
+| T7 | Misaligned & Deceptive Behaviors | ✅ | `/api/owasp-agentic/t7/deceptive-execute` |
+| T8 | Repudiation & Untraceability | ✅ | `/api/owasp-agentic/t8/log/*` |
+| T9 | Identity Spoofing & Impersonation | ✅ | `/api/owasp-agentic/t9/agent/send` |
+| T10 | Overwhelming Human-in-the-Loop (HITL) | ✅ | `/api/owasp-agentic/t10/hitl/*` |
+| T11 | Unexpected RCE & Code Attacks | ✅ | `/api/owasp-agentic/t11/code/execute` |
+| T12 | Agent Communication Poisoning | ✅ | `/api/owasp-agentic/t12/bus/*` |
+| T13 | Rogue Agents in Multi-Agent Systems | ✅ | `/api/owasp-agentic/t13/rogue/register` |
+| T14 | Human Attacks on Multi-Agent Systems | ✅ | `/api/owasp-agentic/t14/cross-agent` |
+| T15 | Human Manipulation | ✅ | `/api/owasp-agentic/t15/manipulate` |
+
 ### Additional Vulnerability Categories
 
 | Category | Description | Endpoints |
@@ -104,6 +131,12 @@ docker-compose up
 | **Multi-Agent** | Agent communication and trust vulnerabilities | `/api/agents/*` |
 | **XSS** | Cross-site scripting via LLM output | `/api/output/*` |
 | **SSRF** | Server-side request forgery | Multiple endpoints |
+| **Source Map Exposure** | Published source map leaks original front-end source & a hardcoded back-door token | `/static/js/*`, `/api/internal/debug-config` |
+
+> **Source Map Exposure lab:** a self-contained, end-to-end demo of how a
+> shipped `.map` file leaks your original source (and a hidden token) to anyone
+> with DevTools. Walkthrough + fixes in
+> [`maul-py/static/js/README.md`](maul-py/static/js/README.md).
 
 ---
 
@@ -162,6 +195,41 @@ docker-compose up
 - `POST /api/agents/chain` - Chain multiple agents
 - `POST /api/agents/delegate` - Agent delegation
 - `GET /api/agents/agent/{id}/prompt` - Agent information
+
+### Agent Trust Protocols (ZTNP / ZTIP) — paired broken + solution
+**ZTNP** (`draft-miller-ztnp-00`) and **ZTIP** (`draft-miller-ztip-00`) are
+open trust-protocol drafts authored by ZIVIS for zero-trust agent negotiation
+and intent verification. MAUL ships them in [`maul-py/examples/`](maul-py/examples/),
+not `vulnerabilities/`, because each protocol ships with both a broken
+implementation (the exploit lab) and a spec-conformant solution implementation
+(the demonstrable fix) — so you can see exactly where a naive implementation
+breaks and how the protocol closes the gap. See
+[`maul-py/examples/README.md`](maul-py/examples/README.md) and the drafts linked
+in [DOCS.md](DOCS.md).
+- `GET  /api/examples/ztnp/scenarios` — list ZTNP walkthroughs
+- `GET  /api/examples/ztip/scenarios` — list ZTIP walkthroughs
+- `POST /api/examples/ztip/scenarios/confused-deputy` — broken ALLOWs `email.send`; solution DENIES `INTENT_SCOPE_MISMATCH`
+- `POST /api/examples/ztnp/scenarios/replay` — broken issues PERMIT; solution DENIES `PA_BIND_MISMATCH`
+- Broken endpoints under `/api/examples/{ztnp,ztip}/broken/*`; solutions under `/api/examples/{ztnp,ztip}/solution/*`
+- See [DOCS.md](DOCS.md) for the full endpoint table
+
+### OWASP Agentic AI Threats (T1–T15)
+- `GET /api/owasp-agentic/catalog` - Live index of all 15 threats and their endpoints
+- `POST /api/owasp-agentic/t1/memory/write` - Memory poisoning (T1)
+- `POST /api/owasp-agentic/t2/tool/dispatch` - Tool misuse (T2)
+- `POST /api/owasp-agentic/t3/escalate` - Privilege compromise (T3)
+- `POST /api/owasp-agentic/t4/fanout` - Resource overload (T4)
+- `POST /api/owasp-agentic/t5/cascade` - Cascading hallucination (T5)
+- `POST /api/owasp-agentic/t6/plan` - Goal manipulation (T6)
+- `POST /api/owasp-agentic/t7/deceptive-execute` - Deceptive behavior (T7)
+- `POST /api/owasp-agentic/t8/log/edit` - Audit log tampering / repudiation (T8)
+- `POST /api/owasp-agentic/t9/agent/send` - Identity spoofing (T9)
+- `POST /api/owasp-agentic/t10/hitl/flood` - HITL fatigue attack (T10)
+- `POST /api/owasp-agentic/t11/code/execute` - LLM-driven RCE (T11)
+- `POST /api/owasp-agentic/t12/bus/tamper` - Inter-agent message tampering (T12)
+- `POST /api/owasp-agentic/t13/rogue/register` - Rogue agent onboarding (T13)
+- `POST /api/owasp-agentic/t14/cross-agent` - Cross-agent privilege abuse (T14)
+- `POST /api/owasp-agentic/t15/manipulate` - Agent-to-human manipulation (T15)
 
 ---
 
@@ -255,6 +323,7 @@ maul/
 ## Documentation
 
 - **[DOCS.md](DOCS.md)** – Technical documentation
+- **[THREAT-MODEL.md](THREAT-MODEL.md)** – Why publishing a vulnerable app is safe & responsible
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** – Contribution guidelines
 - **Swagger UI:** http://localhost:8000/docs
 - **ReDoc:** http://localhost:8000/redoc
@@ -297,4 +366,5 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - [OWASP GenAI Security](https://genai.owasp.org/)
+- [OWASP Agentic AI – Threats and Mitigations v1.0 (Feb 2025)](https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/)
 

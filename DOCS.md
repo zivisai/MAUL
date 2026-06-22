@@ -31,6 +31,7 @@ MAUL is a **purpose-built vulnerable AI application** that simulates real-world 
 - **Developers** understanding how to avoid AI security pitfalls
 - **Red teams** practicing adversarial techniques against LLM applications
 - **Educators** demonstrating AI security concepts
+- **Anyone** wanting to better understand AI security
 
 ### Key Features
 
@@ -94,8 +95,8 @@ maul/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/maul.git
-cd maul
+git clone https://github.com/zivisai/MAUL.git
+cd MAUL
 ```
 
 ### 2. Configure Environment
@@ -192,6 +193,30 @@ docker-compose up
 | Multi-Agent | multi_agent.py | Agent trust and communication |
 | XSS | output_handling.py | Cross-site scripting |
 | SSRF | agent_tools.py, document_upload.py | Server-side request forgery |
+
+### OWASP Agentic AI Threats and Mitigations v1.0 (Feb 2025)
+
+The OWASP GenAI Security Project's [Agentic AI – Threats and Mitigations](https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/) defines 15 threats specific to autonomous, tool-using, multi-agent systems. MAUL implements one or more focused, exploitable endpoints for each. The companion module is `vulnerabilities/owasp_agentic.py`.
+
+| ID | Threat | Endpoint | What it shows |
+|----|--------|----------|---------------|
+| T1 | Memory Poisoning | `POST /api/owasp-agentic/t1/memory/write` | Unauthenticated writes to shared agent memory; downstream `POST /t1/agent/act` trusts the poisoned `user_role` key. |
+| T2 | Tool Misuse | `POST /api/owasp-agentic/t2/tool/dispatch` | LLM picks tool + args from free text with no allowlist on recipients/paths/amounts. |
+| T3 | Privilege Compromise | `POST /api/owasp-agentic/t3/delegate`, `/t3/escalate` | Delegation grants any requested scope; agents can rewrite their own role. |
+| T4 | Resource Overload | `POST /api/owasp-agentic/t4/fanout`, `/t4/loop` | Unbounded fan-out (`branches**depth`) and uncapped re-prompt loops with no per-tenant budget. |
+| T5 | Cascading Hallucination | `POST /api/owasp-agentic/t5/cascade` | Each agent in the chain refines the previous claim into something more confident; no re-grounding. |
+| T6 | Intent Breaking & Goal Manipulation | `POST /api/owasp-agentic/t6/plan` | Retrieved-context field is concatenated into the system prompt; injected directives override the user goal. |
+| T7 | Misaligned & Deceptive Behaviors | `POST /api/owasp-agentic/t7/deceptive-execute` | Agent reports a sanitized public action while a different real action runs; no binding between report and execution. |
+| T8 | Repudiation & Untraceability | `GET/POST/DELETE /api/owasp-agentic/t8/log/*` | Audit log is mutable; entries can be edited or deleted. No append-only, no hash chain, no signed entries. |
+| T9 | Identity Spoofing | `POST /api/owasp-agentic/t9/agent/send` | `from_agent` and `X-Agent-Id` accepted verbatim — no challenge, signature, or mTLS. |
+| T10 | Overwhelming HITL | `POST /api/owasp-agentic/t10/hitl/flood`, `/t10/hitl/auto-approve` | Flood the queue with `count` benign items hiding one malicious request; reviewer auto-approves under fatigue. |
+| T11 | Unexpected RCE & Code Attacks | `POST /api/owasp-agentic/t11/code/execute` | Natural-language → shell command via LLM, run with `shell=True`, no sandbox or allowlist. |
+| T12 | Agent Communication Poisoning | `POST /api/owasp-agentic/t12/bus/tamper` | Mutate an in-flight inter-agent message body; no signing, MAC, or nonce. |
+| T13 | Rogue Agents | `POST /api/owasp-agentic/t13/rogue/register` | Register a malicious agent under a trusted-looking name with self-claimed trust score. |
+| T14 | Human Attacks on MAS | `POST /api/owasp-agentic/t14/cross-agent` | Low-privilege entry agent forwards user text into a high-privilege agent's prompt as a "trusted internal message." |
+| T15 | Human Manipulation | `POST /api/owasp-agentic/t15/manipulate` | Agent receives a hidden objective and steers the user toward it through a trusted UI. |
+
+Live index of all 15 endpoints: `GET /api/owasp-agentic/catalog`.
 
 ### WEF AI Agent Vulnerabilities (2025)
 
@@ -375,6 +400,102 @@ Based on the [World Economic Forum "AI Agents in Action" report](https://www.wef
 | GET | `/api/governance/audit/logs` | Get audit logs |
 | POST | `/api/governance/audit/logs/tamper` | Tamper with logs |
 
+### Agent Trust Protocols (`examples/`)
+
+The Agent Trust Protocols — **ZTNP** (`draft-miller-ztnp-00`) and **ZTIP**
+(`draft-miller-ztip-00`) — live in [`maul-py/examples/`](maul-py/examples/)
+rather than `vulnerabilities/`, because each protocol ships with paired
+**broken** and **solution** implementations:
+
+- `broken.py` is the deliberately-wrong implementation (the exploit lab).
+- `solution.py` is the spec-conformant implementation (the demonstrable fix).
+- `scenarios.py` runs an attack against `broken`, replays the artifact
+  through `solution`, and returns both decisions side-by-side with a
+  `lesson` field citing the relevant draft section.
+
+See [`maul-py/examples/README.md`](maul-py/examples/README.md) for the
+directory structure and a quick tour.
+
+#### ZTNP – Zero-Trust Negotiation Protocol
+
+| Method | Endpoint | Track | Description |
+|--------|----------|-------|-------------|
+| GET  | `/api/examples/ztnp/broken/iks` | broken | List Issuers + IKS URLs |
+| GET  | `/api/examples/ztnp/broken/iks/{iss_b64}` | broken | Issuer Key Set |
+| POST | `/api/examples/ztnp/broken/iks/{iss_b64}/rotate` | broken | **V7**: unauthenticated key rotation |
+| POST | `/api/examples/ztnp/broken/enroll` | broken | **V5**: trivial PA issuance |
+| GET  | `/api/examples/ztnp/broken/pa/{jti}` | broken | Fetch issued PA |
+| POST | `/api/examples/ztnp/broken/challenge` | broken | Issue challenge nonce |
+| POST | `/api/examples/ztnp/broken/proof` | broken | **V1/V3/V6**: PERMIT issued without checks |
+| GET  | `/api/examples/ztnp/broken/permits/{id}/validate` | broken | **V4**: no channel binding |
+| GET  | `/api/examples/ztnp/solution/policy` | solution | Show Requester local policy |
+| POST | `/api/examples/ztnp/solution/verify-pa` | solution | Standalone PA verifier |
+| POST | `/api/examples/ztnp/solution/proof` | solution | Spec-conformant negotiation |
+| GET  | `/api/examples/ztnp/solution/permits/{id}/validate` | solution | Sig + channel-binding check |
+| GET  | `/api/examples/ztnp/scenarios` | scenarios | List walkthroughs |
+| POST | `/api/examples/ztnp/scenarios/replay` | scenarios | PA replay (Section 5.5) |
+| POST | `/api/examples/ztnp/scenarios/tier-confusion` | scenarios | Cross-issuer tier confusion (Section 4) |
+| POST | `/api/examples/ztnp/scenarios/self-attest` | scenarios | Self-attested tier inflation (Section 11) |
+| POST | `/api/examples/ztnp/scenarios/permit-lift` | scenarios | Permit lifted (Section 8.2) |
+| POST | `/api/examples/ztnp/scenarios/iks-poison` | scenarios | Unauthenticated IKS rotation (Section 6.2) |
+
+#### ZTIP – Zero-Trust Intent Protocol
+
+| Method | Endpoint | Track | Description |
+|--------|----------|-------|-------------|
+| POST | `/api/examples/ztip/broken/intent/sign` | broken | Originator signs root Intent |
+| POST | `/api/examples/ztip/broken/chain/wrap` | broken | **V2/V4**: no monotonicity, no depth cap |
+| POST | `/api/examples/ztip/broken/chain/verify` | broken | **V1/V2/V3/V4/V7**: no checks |
+| POST | `/api/examples/ztip/broken/token/intent-scoped` | broken | **V3**: intent_hash never recomputed |
+| POST | `/api/examples/ztip/broken/operation/gate` | broken | **V3/V5**: trusts AS-issued scope |
+| POST | `/api/examples/ztip/broken/behavioral/issue` | broken | Issue Behavioral Claims credential |
+| POST | `/api/examples/ztip/solution/chain/verify` | solution | Section 3.3 rules 1–7 |
+| POST | `/api/examples/ztip/solution/operation/gate` | solution | Recomputes intent_hash; enforces intent_scope |
+| POST | `/api/examples/ztip/solution/behavioral/check` | solution | Requires evidence + public corpus |
+| GET  | `/api/examples/ztip/scenarios` | scenarios | List walkthroughs |
+| POST | `/api/examples/ztip/scenarios/confused-deputy` | scenarios | Prompt-injected confused deputy (Section 4) |
+| POST | `/api/examples/ztip/scenarios/scope-expansion` | scenarios | Scope expansion mid-chain (Section 3.4) |
+| POST | `/api/examples/ztip/scenarios/untrusted-root` | scenarios | Untrusted Originator at chain root (Section 3.3) |
+| POST | `/api/examples/ztip/scenarios/depth-bomb` | scenarios | Deep-chain DoS (Section 3.5) |
+| POST | `/api/examples/ztip/scenarios/behavioral-bluff` | scenarios | Claim without evidence (Section 5.1.1) |
+
+References:
+- ZTNP: <https://github.com/agent-trust-protocols/agent-trust-protocols/blob/main/drafts/ztnp/draft-miller-ztnp-00.md>
+- ZTIP: <https://github.com/agent-trust-protocols/agent-trust-protocols/blob/main/drafts/ztip/draft-miller-ztip-00.md>
+
+### OWASP Agentic AI (T1-T15)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET  | `/api/owasp-agentic/catalog` | List all 15 threats and endpoints |
+| POST | `/api/owasp-agentic/t1/memory/write` | T1: Poison shared agent memory |
+| GET  | `/api/owasp-agentic/t1/memory/read` | T1: Read poisoned memory |
+| POST | `/api/owasp-agentic/t1/agent/act` | T1: Agent acts on poisoned memory |
+| POST | `/api/owasp-agentic/t2/tool/dispatch` | T2: LLM-driven tool dispatch (no validation) |
+| POST | `/api/owasp-agentic/t3/delegate` | T3: Unbounded scope delegation |
+| POST | `/api/owasp-agentic/t3/escalate` | T3: Direct role escalation |
+| POST | `/api/owasp-agentic/t4/fanout` | T4: Recursive fan-out explosion |
+| POST | `/api/owasp-agentic/t4/loop` | T4: Unbounded iteration loop |
+| POST | `/api/owasp-agentic/t5/cascade` | T5: Hallucination chain across agents |
+| POST | `/api/owasp-agentic/t6/plan` | T6: Goal hijack via retrieved context |
+| POST | `/api/owasp-agentic/t7/deceptive-execute` | T7: Report-vs-action divergence |
+| GET  | `/api/owasp-agentic/t8/log` | T8: View mutable audit log |
+| POST | `/api/owasp-agentic/t8/log/edit` | T8: Edit any audit entry |
+| DELETE | `/api/owasp-agentic/t8/log/delete` | T8: Delete an audit entry |
+| POST | `/api/owasp-agentic/t9/agent/send` | T9: Send message claiming any sender |
+| POST | `/api/owasp-agentic/t10/hitl/submit` | T10: Submit HITL approval request |
+| POST | `/api/owasp-agentic/t10/hitl/flood` | T10: Flood approval queue |
+| POST | `/api/owasp-agentic/t10/hitl/auto-approve` | T10: Reviewer fatigue auto-approve |
+| POST | `/api/owasp-agentic/t11/code/execute` | T11: NL→shell via LLM (RCE) |
+| GET  | `/api/owasp-agentic/t12/bus` | T12: View inter-agent message bus |
+| POST | `/api/owasp-agentic/t12/bus/tamper` | T12: Mutate in-flight messages |
+| POST | `/api/owasp-agentic/t13/rogue/register` | T13: Register a rogue agent |
+| GET  | `/api/owasp-agentic/t13/registry` | T13: Inspect agent registry |
+| POST | `/api/owasp-agentic/t14/cross-agent` | T14: Cross-agent privilege abuse |
+| POST | `/api/owasp-agentic/t15/manipulate` | T15: Hidden-objective user nudging |
+
+Reference: <https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/>
+
 ---
 
 ## Database Schema
@@ -421,8 +542,8 @@ CREATE TABLE langchain_pg_embedding (
 ### Local Docker (Recommended)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/maul.git
-cd maul
+git clone https://github.com/zivisai/MAUL.git
+cd MAUL
 cp .env.example .env
 docker-compose build
 docker-compose up
@@ -604,6 +725,7 @@ docker-compose up
 
 - [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - [OWASP GenAI Security](https://genai.owasp.org/)
+- [OWASP Agentic AI – Threats and Mitigations v1.0](https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/)
 - [WEF AI Agents in Action (2025)](https://www.weforum.org/publications/ai-agents-in-action-foundations-for-evaluation-and-governance-2025/)
 - [LangChain Documentation](https://python.langchain.com/)
 - [pgvector Documentation](https://github.com/pgvector/pgvector)

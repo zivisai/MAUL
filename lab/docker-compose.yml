@@ -1,0 +1,101 @@
+# ATP Lab - multi-container demonstration of ZTNP + ZTIP
+#
+# Topology:
+#
+#   driver -> orchestrator -> worker -> tool
+#                                ^         |
+#                                |         v
+#                              issuer <- (PA verify, IKS lookup)
+#
+# Every connection is mTLS over a self-signed CA minted by the `certs`
+# init container. The CA + per-service certs land in a shared volume.
+#
+# Usage:
+#
+#   docker compose -f lab/docker-compose.yml up --build -d
+#   docker compose -f lab/docker-compose.yml run --rm driver
+#   docker compose -f lab/docker-compose.yml logs -f tool
+#   docker compose -f lab/docker-compose.yml down -v
+
+x-agent: &agent
+  build:
+    context: ./agent
+  volumes:
+    - certs:/certs:ro
+  networks:
+    - lab
+  depends_on:
+    certs:
+      condition: service_completed_successfully
+
+services:
+
+  certs:
+    build:
+      context: ./setup
+    image: atp-lab-setup
+    volumes:
+      - certs:/certs
+    networks:
+      - lab
+
+  issuer:
+    <<: *agent
+    image: atp-lab-agent
+    container_name: issuer
+    hostname: issuer
+    environment:
+      SERVICE_NAME: issuer
+
+  originator:
+    <<: *agent
+    image: atp-lab-agent
+    container_name: originator
+    hostname: originator
+    environment:
+      SERVICE_NAME: originator
+
+  orchestrator:
+    <<: *agent
+    image: atp-lab-agent
+    container_name: orchestrator
+    hostname: orchestrator
+    environment:
+      SERVICE_NAME: orchestrator
+
+  worker:
+    <<: *agent
+    image: atp-lab-agent
+    container_name: worker
+    hostname: worker
+    environment:
+      SERVICE_NAME: worker
+
+  tool:
+    <<: *agent
+    image: atp-lab-agent
+    container_name: tool
+    hostname: tool
+    environment:
+      SERVICE_NAME: tool
+
+  driver:
+    build:
+      context: ./driver
+    image: atp-lab-driver
+    container_name: driver
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - lab
+    profiles: ["driver"]
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+
+volumes:
+  certs:
+
+networks:
+  lab:
+    driver: bridge

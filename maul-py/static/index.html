@@ -225,8 +225,8 @@
         </header>
 
         <div class="warning-banner">
-            <h3>⚠️ Intentionally Vulnerable Application</h3>
-            <p>This application contains security vulnerabilities for training purposes. Do not deploy in production.</p>
+            <h3>⚠️ Lab / Training Use Only — Intentionally Vulnerable</h3>
+            <p>This is a deliberately vulnerable AI application built by ZIVIS for security training and research. Nothing here is a real system. Run it in isolation — do not deploy in production or expose to the public internet.</p>
         </div>
 
         <div class="tabs">
@@ -744,5 +744,12 @@
             if (e.key === 'Enter') sendChat();
         });
     </script>
+
+    <!-- Source-map exposure lab: ships the minified bundle AND its .map.
+         See maul-py/static/js/README.md -->
+    <footer style="text-align:center;padding:20px 0;color:var(--text-muted);font-size:0.8rem;border-top:1px solid var(--border);margin-top:30px">
+        <span id="buildInfo">MAUL</span>
+    </footer>
+    <script src="/static/js/app.min.js"></script>
 </body>
 </html>
